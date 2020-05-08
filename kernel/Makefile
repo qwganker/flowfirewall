@@ -1,4 +1,5 @@
-obj-m := k_url_block.o  
+# obj-m := k_url_block.o
+obj-m := firewall.o  
     KERNELBUILD :=/lib/modules/$(shell uname -r)/build  
 default:  
 	make -C $(KERNELBUILD) M=$(shell pwd) modules  

@@ -1,0 +1,6 @@
+{
+    "files.associations": {
+        "netfilter.h": "c",
+        "netlink.h": "c"
+    }
+}
