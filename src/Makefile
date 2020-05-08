@@ -4,4 +4,4 @@ obj-m := firewall.o
 default:  
 	make -C $(KERNELBUILD) M=$(shell pwd) modules  
 clean:  
-	rm -rf *.o  *.mod.c .*.cmd *.markers *.order *.symvers .tmp_versions  *~
+	rm -rf *.ko *.o  *.mod.c .*.cmd *.markers *.order *.symvers .tmp_versions  *~

@@ -31,9 +31,7 @@ typedef struct Rule
     unsigned int dip;
     unsigned short sport;
     unsigned short dport;
-    unsigned short protocol;
     bool isPermit;
-    bool isLog;
     struct Rule *next;
 } Rule;
 
@@ -44,6 +42,7 @@ watch_in(void *priv,
 {
     struct ethhdr *eth = eth_hdr(skb);
     struct iphdr *iph = ip_hdr(skb);
+    struct tcphdr *tcph = (struct tcphdr *)(skb->data + (iph->ihl * 4));
 
     if (!skb || !iph)
     {
@@ -60,18 +59,13 @@ watch_in(void *priv,
         return NF_ACCEPT;
     }
 
-    LOG_DEBUG("Hook tcp -> sip: [%u.%u.%u.%u],  dst: [%u.%u.%u.%u]\n", NIPQUAD(iph->saddr), NIPQUAD(iph->daddr));
-
-    Rule rule = {0, 0, 0, 0, 0, false, false, NULL};
+    Rule rule = {0, 0, 0, 0, 0, false};
     rule.sip = iph->saddr;
     rule.dip = iph->daddr;
-    rule.protocol = IPPROTO_TCP;
-
-    struct tcphdr *tcph;
-    tcph = (struct tcphdr *)(skb->data + (iph->ihl * 4));
     rule.sport = ntohs(tcph->source);
     rule.dport = ntohs(tcph->dest);
 
+    LOG_DEBUG("Hook TCP: source [%u.%u.%u.%u]:[%u] --> destination [%u.%u.%u.%u]:[%u]\n", NIPQUAD(rule.sip), rule.sport, NIPQUAD(rule.dip), rule.dport);
 
     return NF_ACCEPT;
 }
