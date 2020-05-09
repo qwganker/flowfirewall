@@ -16,75 +16,12 @@
 #include <linux/if_packet.h>
 
 #include "config.h"
-
-#define LOG_ERROR(fmt, ...) printk("[%s:%d]Error: " fmt "", __FUNCTION__, __LINE__, ##__VA_ARGS__)
-#define LOG_WARN(fmt, ...) printk("[%s:%d]Warn: " fmt "", __FUNCTION__, __LINE__, ##__VA_ARGS__)
-#define LOG_DEBUG(fmt, ...) printk("[%s:%d]: " fmt "", __FUNCTION__, __LINE__, ##__VA_ARGS__)
-
-#define IP(addr)                     \
-    ((unsigned char *)&addr)[0],     \
-        ((unsigned char *)&addr)[1], \
-        ((unsigned char *)&addr)[2], \
-        ((unsigned char *)&addr)[3]
-
-typedef struct packet
-{
-    unsigned int sip;
-    unsigned int dip;
-    unsigned short sport;
-    unsigned short dport;
-} packet_t;
-
-typedef struct rule
-{
-    unsigned int sip;
-    unsigned short sport;
-    unsigned short trojanport; // 木马端口
-    struct rule *next;
-} rule_t;
+#include "packet.h"
+#include "utils.h"
+#include "rule.h"
+#include "log.h"
 
 static rule_t rule_list_head;
-
-unsigned int ipstr_to_uint(const char *ipstr)
-{
-    unsigned int tmp[4] = {0};
-    unsigned int ui = 0;
-
-    sscanf(ipstr, "%d.%d.%d.%d", &tmp[0], &tmp[1], &tmp[2], &tmp[3]);
-
-    ui = (tmp[3] << 24) | (tmp[2] << 16) | (tmp[1] << 8) | (tmp[0]);
-
-    return ui;
-}
-
-
-rule_t *kmalloc_rule(void)
-{
-    rule_t *p = kmalloc(sizeof(rule_t), GFP_ATOMIC);
-    if (!p)
-    {
-        return NULL;
-    }
-    return p;
-}
-
-void free_rule(rule_t *p)
-{
-    if (!p)
-    {
-        return;
-    }
-    kfree(p);
-}
-
-void rule_init(rule_t *prule, const char *sip, unsigned short sport, unsigned short trojanport)
-{
-    prule->sip = ipstr_to_uint(sip);
-    prule->sport = sport;
-    prule->trojanport = trojanport;
-    prule->next = NULL;
-}
-
 
 void skb_to_packet(struct sk_buff *skb, packet_t *packet)
 {
@@ -106,21 +43,20 @@ void init_rule_list(void)
     
     int i = 0;
     for (; i < len; i++) {
-        rule_t *r = kmalloc_rule();
+        rule_t *r = rule_malloc();
         rule_init(r, configs[i].sip, configs[i].sport, configs[i].trojanport);
         p->next = r;
         p = r;
     }
 }
 
-bool rule_match(const rule_t *rule, const packet_t *in)
+bool match_rule(const rule_t *rule, const packet_t *in)
 {
-    LOG_DEBUG("rule---> source [%u.%u.%u.%u:%u] trojanport: [%u]\n", IP(rule->sip), rule->sport, rule->trojanport);
+    LOG_DEBUG("match rule --> source [%u.%u.%u.%u:%u] trojanport: [%u]\n", IPSTR(rule->sip), rule->sport, rule->trojanport);
 
     // 匹配源ip/port 或者 木马端口
     if ((rule->sip == in->sip && rule->sport == in->sport) || rule->trojanport == in->dport)
     {
-        LOG_WARN("to drop packet !!!\n\n");
         return true;
     }
 
@@ -131,13 +67,14 @@ bool rule_match(const rule_t *rule, const packet_t *in)
  *  return: true: NF_DROP 
  *          false: NF_ACCEPT
  */
-bool rule_chain_filter_packet(const packet_t *in) {
+bool filter_packet(const packet_t *in) {
     
     rule_t *r = rule_list_head.next;
     while (r != NULL)
     {
-        if (rule_match(r, in))
+        if (match_rule(r, in))
         {
+            LOG_WARN("to drop packet !!!\n\n");
             return true;
         }
 
@@ -172,9 +109,9 @@ unsigned int watch_in(void *priv, struct sk_buff *skb, const struct nf_hook_stat
 
     skb_to_packet(skb, &packet);
 
-    LOG_DEBUG("Hook TCP packet: [%u.%u.%u.%u:%u] -->  [%u.%u.%u.%u:%u]\n", IP(packet.sip), packet.sport, IP(packet.dip), packet.dport);
+    LOG_DEBUG("Hook TCP packet: [%u.%u.%u.%u:%u] -->  [%u.%u.%u.%u:%u]\n", IPSTR(packet.sip), packet.sport, IPSTR(packet.dip), packet.dport);
 
-    if (rule_chain_filter_packet(&packet))
+    if (filter_packet(&packet))
     {
         return NF_DROP;
     }

@@ -1,5 +1,5 @@
-obj-m := firewall.o
-# firewall-objs += util.o
+obj-m += firewall.o
+firewall-objs := main.o utils.o rule.o
 KERNELBUILD :=/lib/modules/$(shell uname -r)/build  
 default:  
 	make -C $(KERNELBUILD) M=$(shell pwd) modules
