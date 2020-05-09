@@ -37,12 +37,13 @@ void skb_to_packet(struct sk_buff *skb, packet_t *packet)
 
 void init_rule_list(void)
 {
-    int len  = sizeof(configs)/sizeof(config_t);
+    int len = sizeof(configs) / sizeof(config_t);
 
     rule_t *p = &rule_list_head;
-    
+
     int i = 0;
-    for (; i < len; i++) {
+    for (; i < len; i++)
+    {
         rule_t *r = rule_malloc();
         rule_init(r, configs[i].sip, configs[i].sport, configs[i].trojanport);
         p->next = r;
@@ -67,8 +68,8 @@ bool match_rule(const rule_t *rule, const packet_t *in)
  *  return: true: NF_DROP 
  *          false: NF_ACCEPT
  */
-bool filter_packet(const packet_t *in) {
-    
+bool filter_packet(const packet_t *in)
+{
     rule_t *r = rule_list_head.next;
     while (r != NULL)
     {
@@ -80,7 +81,7 @@ bool filter_packet(const packet_t *in) {
 
         r = r->next;
     }
-    
+
     LOG_DEBUG("to accept packet ...\n\n");
     return false;
 }
@@ -105,7 +106,6 @@ unsigned int watch_in(void *priv, struct sk_buff *skb, const struct nf_hook_stat
     {
         return NF_ACCEPT;
     }
-
 
     skb_to_packet(skb, &packet);
 
