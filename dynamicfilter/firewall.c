@@ -17,8 +17,9 @@
 #include <linux/if_packet.h>
 #include <linux/slab.h>
 
-#define LOG_ERROR(fmt, ...) printk("[%d][%s]Error: " fmt "", __LINE__, __FUNCTION__, ##__VA_ARGS__)
-#define LOG_DEBUG(fmt, ...) printk("[%d][%s]: " fmt "", __LINE__, __FUNCTION__, ##__VA_ARGS__)
+#define LOG_ERROR(fmt, ...) printk("[%s:%d]Error: " fmt "", __FUNCTION__, __LINE__, ##__VA_ARGS__)
+#define LOG_WARN(fmt, ...) printk("[%s:%d]Warn: " fmt "", __FUNCTION__, __LINE__, ##__VA_ARGS__)
+#define LOG_DEBUG(fmt, ...) printk("[%s:%d]: " fmt "", __FUNCTION__, __LINE__, ##__VA_ARGS__)
 
 #define IP(addr)                     \
     ((unsigned char *)&addr)[0],     \
@@ -32,11 +33,23 @@ typedef struct rule
     unsigned int dip;
     unsigned short sport;
     unsigned short dport;
-    bool isPermit;
+    bool permit;    // false 不允许; true 允许
     struct rule *next;
 } rule_t;
 
-static rule_t *ruleListHead = NULL;
+static rule_t rule_list_head;
+
+unsigned int ipstr_to_uint(const char *ipstr)
+{
+    unsigned int tmp[4] = {0};
+    unsigned int ui = 0;
+
+    sscanf(ipstr, "%d.%d.%d.%d", &tmp[0], &tmp[1], &tmp[2], &tmp[3]);
+
+    ui = (tmp[3] << 24) | (tmp[2] << 16) | (tmp[1] << 8) | (tmp[0]);
+
+    return ui;
+}
 
 rule_t *kmalloc_rule(void)
 {
@@ -57,10 +70,57 @@ void free_rule(rule_t *p)
     kfree(p);
 }
 
-void init_rule_list() {
-
+void rule_init(rule_t *prule, const char *sip, const char *dip, unsigned short sport, unsigned short dport, bool permit)
+{
+    prule->sip = ipstr_to_uint(sip);
+    prule->dip = ipstr_to_uint(dip);
+    prule->sport = sport;
+    prule->dport = dport;
+    prule->permit = permit;
+    prule->next = NULL;
 }
 
+void init_rule_list(void)
+{
+    // aggsky.travelsky.com
+    rule_t *r = kmalloc_rule();
+    rule_init(r, "122.119.4.127", "0.0.0.0", 80, 0, false);
+    rule_list_head.next = r;
+}
+
+bool match_rule(const rule_t *rule, const rule_t *in)
+{
+    LOG_DEBUG("-------> source [%u.%u.%u.%u:%u] --> destination [%u.%u.%u.%u:%u] permit:[%s]\n", IP(rule->sip), rule->sport, IP(rule->dip), rule->dport, rule->permit==false? "false":"true");
+
+    if ((rule->sip == in->sip || rule->dip == in->dip || rule->sport == in->sport || rule->dport == in->dport) && rule->permit == false)
+    {
+        LOG_WARN("to drop packet !!!\n\n");
+        return true;
+    }
+
+    return false;
+}
+
+/**
+ *  return: true: NF_DROP 
+ *          false: NF_ACCEPT
+ */
+bool rule_chain_filter(const rule_t *in) {
+    
+    rule_t *r = rule_list_head.next;
+    while (r != NULL)
+    {
+        if (match_rule(r, in))
+        {
+            return true;
+        }
+
+        r = r->next;
+    }
+    
+    LOG_DEBUG("to accept packet ...\n\n");
+    return false;
+}
 
 unsigned int watch_in(void *priv, struct sk_buff *skb, const struct nf_hook_state *state)
 {
@@ -88,8 +148,12 @@ unsigned int watch_in(void *priv, struct sk_buff *skb, const struct nf_hook_stat
     rule.dip = iph->daddr;
     rule.sport = ntohs(tcph->source);
     rule.dport = ntohs(tcph->dest);
+    LOG_DEBUG("Hook TCP: source [%u.%u.%u.%u:%u] --> destination [%u.%u.%u.%u:%u]\n", IP(rule.sip), rule.sport, IP(rule.dip), rule.dport);
 
-    LOG_DEBUG("Hook TCP: source [%u.%u.%u.%u]:[%u] --> destination [%u.%u.%u.%u]:[%u]\n", IP(rule.sip), rule.sport, IP(rule.dip), rule.dport);
+    if (rule_chain_filter(&rule))
+    {
+        return NF_DROP;
+    }
 
     return NF_ACCEPT;
 }
