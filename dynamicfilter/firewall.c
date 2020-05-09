@@ -1,44 +1,68 @@
 /**
  * Linux 4.18.0-15-generic
 */
-
-#include <linux/kernel.h>
 #include <linux/module.h>
-#include <linux/skbuff.h>
+#include <linux/fs.h>
+#include <linux/kernel.h>
+// #include <linux/skbuff.h>
+#include <linux/in.h>
 #include <linux/ip.h>
 #include <linux/tcp.h>
-#include <linux/string.h>
-#include <linux/list.h>
+#include <linux/icmp.h>
 #include <linux/netdevice.h>
 #include <linux/netfilter.h>
 #include <linux/netfilter_ipv4.h>
-#include <linux/timer.h>
-#include <linux/rtc.h>
+#include <linux/if_arp.h>
 #include <linux/if_ether.h>
+#include <linux/if_packet.h>
+#include <linux/slab.h>
 
 #define LOG_ERROR(fmt, ...) printk("[%d][%s]Error: " fmt "", __LINE__, __FUNCTION__, ##__VA_ARGS__)
 #define LOG_DEBUG(fmt, ...) printk("[%d][%s]: " fmt "", __LINE__, __FUNCTION__, ##__VA_ARGS__)
 
-#define NIPQUAD(addr) \
-((unsigned char *)&addr)[0], \
-((unsigned char *)&addr)[1], \
-((unsigned char *)&addr)[2], \
-((unsigned char *)&addr)[3]
+#define IP(addr)                     \
+    ((unsigned char *)&addr)[0],     \
+        ((unsigned char *)&addr)[1], \
+        ((unsigned char *)&addr)[2], \
+        ((unsigned char *)&addr)[3]
 
-typedef struct Rule
+typedef struct rule
 {
     unsigned int sip;
     unsigned int dip;
     unsigned short sport;
     unsigned short dport;
     bool isPermit;
-    struct Rule *next;
-} Rule;
+    struct rule *next;
+} rule_t;
 
-unsigned int
-watch_in(void *priv,
-         struct sk_buff *skb,
-         const struct nf_hook_state *state)
+static rule_t *ruleListHead = NULL;
+
+rule_t *kmalloc_rule(void)
+{
+    rule_t *p = kmalloc(sizeof(rule_t), GFP_ATOMIC);
+    if (!p)
+    {
+        return NULL;
+    }
+    return p;
+}
+
+void free_rule(rule_t *p)
+{
+    if (!p)
+    {
+        return;
+    }
+    kfree(p);
+}
+
+void init_rule_list() {
+
+}
+
+
+unsigned int watch_in(void *priv, struct sk_buff *skb, const struct nf_hook_state *state)
 {
     struct ethhdr *eth = eth_hdr(skb);
     struct iphdr *iph = ip_hdr(skb);
@@ -59,13 +83,13 @@ watch_in(void *priv,
         return NF_ACCEPT;
     }
 
-    Rule rule = {0, 0, 0, 0, 0, false};
+    rule_t rule = {0, 0, 0, 0, 0, false};
     rule.sip = iph->saddr;
     rule.dip = iph->daddr;
     rule.sport = ntohs(tcph->source);
     rule.dport = ntohs(tcph->dest);
 
-    LOG_DEBUG("Hook TCP: source [%u.%u.%u.%u]:[%u] --> destination [%u.%u.%u.%u]:[%u]\n", NIPQUAD(rule.sip), rule.sport, NIPQUAD(rule.dip), rule.dport);
+    LOG_DEBUG("Hook TCP: source [%u.%u.%u.%u]:[%u] --> destination [%u.%u.%u.%u]:[%u]\n", IP(rule.sip), rule.sport, IP(rule.dip), rule.dport);
 
     return NF_ACCEPT;
 }
@@ -81,8 +105,10 @@ static int __init firewall_module_init(void)
 {
     if (0 > nf_register_net_hook(&init_net, &firewall_hook_ops))
     {
-        LOG_ERROR("Regist nf module failed !!!\n");
+        LOG_ERROR("register nf module failed !!!\n");
     }
+
+    init_rule_list();
 
     LOG_DEBUG("firewall startup ...\n");
     return 0;
@@ -93,6 +119,8 @@ static void __exit firewall_module_exit(void)
     nf_unregister_net_hook(&init_net, &firewall_hook_ops);
     LOG_DEBUG("firewall shutdown ...\n");
 }
+
+MODULE_LICENSE("GPL");
 
 module_init(firewall_module_init);
 module_exit(firewall_module_exit);

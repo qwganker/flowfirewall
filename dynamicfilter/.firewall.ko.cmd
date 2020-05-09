@@ -1,0 +1,1 @@
+cmd_/home/wqiu/work/flowfirewall/dynamicfilter/firewall.ko := ld -r -m elf_x86_64  -z max-page-size=0x200000 -T ./scripts/module-common.lds  --build-id  -o /home/wqiu/work/flowfirewall/dynamicfilter/firewall.ko /home/wqiu/work/flowfirewall/dynamicfilter/firewall.o /home/wqiu/work/flowfirewall/dynamicfilter/firewall.mod.o ;  true
