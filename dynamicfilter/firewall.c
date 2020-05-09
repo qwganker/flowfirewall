@@ -4,7 +4,6 @@
 #include <linux/module.h>
 #include <linux/fs.h>
 #include <linux/kernel.h>
-// #include <linux/skbuff.h>
 #include <linux/in.h>
 #include <linux/ip.h>
 #include <linux/tcp.h>
@@ -15,7 +14,8 @@
 #include <linux/if_arp.h>
 #include <linux/if_ether.h>
 #include <linux/if_packet.h>
-#include <linux/slab.h>
+
+#include "config.h"
 
 #define LOG_ERROR(fmt, ...) printk("[%s:%d]Error: " fmt "", __FUNCTION__, __LINE__, ##__VA_ARGS__)
 #define LOG_WARN(fmt, ...) printk("[%s:%d]Warn: " fmt "", __FUNCTION__, __LINE__, ##__VA_ARGS__)
@@ -27,13 +27,19 @@
         ((unsigned char *)&addr)[2], \
         ((unsigned char *)&addr)[3]
 
-typedef struct rule
+typedef struct packet
 {
     unsigned int sip;
     unsigned int dip;
     unsigned short sport;
     unsigned short dport;
-    bool permit;    // false 不允许; true 允许
+} packet_t;
+
+typedef struct rule
+{
+    unsigned int sip;
+    unsigned short sport;
+    unsigned short trojanport; // 木马端口
     struct rule *next;
 } rule_t;
 
@@ -50,6 +56,7 @@ unsigned int ipstr_to_uint(const char *ipstr)
 
     return ui;
 }
+
 
 rule_t *kmalloc_rule(void)
 {
@@ -70,29 +77,48 @@ void free_rule(rule_t *p)
     kfree(p);
 }
 
-void rule_init(rule_t *prule, const char *sip, const char *dip, unsigned short sport, unsigned short dport, bool permit)
+void rule_init(rule_t *prule, const char *sip, unsigned short sport, unsigned short trojanport)
 {
     prule->sip = ipstr_to_uint(sip);
-    prule->dip = ipstr_to_uint(dip);
     prule->sport = sport;
-    prule->dport = dport;
-    prule->permit = permit;
+    prule->trojanport = trojanport;
     prule->next = NULL;
+}
+
+
+void skb_to_packet(struct sk_buff *skb, packet_t *packet)
+{
+    // struct ethhdr *eth = eth_hdr(skb);
+    struct iphdr *iph = ip_hdr(skb);
+    struct tcphdr *tcph = (struct tcphdr *)(skb->data + (iph->ihl * 4));
+
+    packet->sip = iph->saddr;
+    packet->dip = iph->daddr;
+    packet->sport = ntohs(tcph->source);
+    packet->dport = ntohs(tcph->dest);
 }
 
 void init_rule_list(void)
 {
-    // aggsky.travelsky.com
-    rule_t *r = kmalloc_rule();
-    rule_init(r, "122.119.4.127", "0.0.0.0", 80, 0, false);
-    rule_list_head.next = r;
+    int len  = sizeof(configs)/sizeof(config_t);
+
+    rule_t *p = &rule_list_head;
+    
+    int i = 0;
+    for (; i < len; i++) {
+        rule_t *r = kmalloc_rule();
+        rule_init(r, configs[i].sip, configs[i].sport, configs[i].trojanport);
+        p->next = r;
+        p = r;
+    }
 }
 
-bool match_rule(const rule_t *rule, const rule_t *in)
+bool rule_match(const rule_t *rule, const packet_t *in)
 {
-    LOG_DEBUG("-------> source [%u.%u.%u.%u:%u] --> destination [%u.%u.%u.%u:%u] permit:[%s]\n", IP(rule->sip), rule->sport, IP(rule->dip), rule->dport, rule->permit==false? "false":"true");
+    LOG_DEBUG("rule---> source [%u.%u.%u.%u:%u] trojanport: [%u]\n", IP(rule->sip), rule->sport, rule->trojanport);
 
-    if ((rule->sip == in->sip || rule->dip == in->dip || rule->sport == in->sport || rule->dport == in->dport) && rule->permit == false)
+    // 匹配源ip/port 或者 木马端口
+    if ((rule->sip == in->sip && rule->sport == in->sport) || rule->trojanport == in->dport)
     {
         LOG_WARN("to drop packet !!!\n\n");
         return true;
@@ -105,12 +131,12 @@ bool match_rule(const rule_t *rule, const rule_t *in)
  *  return: true: NF_DROP 
  *          false: NF_ACCEPT
  */
-bool rule_chain_filter(const rule_t *in) {
+bool rule_chain_filter_packet(const packet_t *in) {
     
     rule_t *r = rule_list_head.next;
     while (r != NULL)
     {
-        if (match_rule(r, in))
+        if (rule_match(r, in))
         {
             return true;
         }
@@ -126,7 +152,7 @@ unsigned int watch_in(void *priv, struct sk_buff *skb, const struct nf_hook_stat
 {
     struct ethhdr *eth = eth_hdr(skb);
     struct iphdr *iph = ip_hdr(skb);
-    struct tcphdr *tcph = (struct tcphdr *)(skb->data + (iph->ihl * 4));
+    packet_t packet = {0, 0, 0, 0};
 
     if (!skb || !iph)
     {
@@ -143,14 +169,12 @@ unsigned int watch_in(void *priv, struct sk_buff *skb, const struct nf_hook_stat
         return NF_ACCEPT;
     }
 
-    rule_t rule = {0, 0, 0, 0, 0, false};
-    rule.sip = iph->saddr;
-    rule.dip = iph->daddr;
-    rule.sport = ntohs(tcph->source);
-    rule.dport = ntohs(tcph->dest);
-    LOG_DEBUG("Hook TCP: source [%u.%u.%u.%u:%u] --> destination [%u.%u.%u.%u:%u]\n", IP(rule.sip), rule.sport, IP(rule.dip), rule.dport);
 
-    if (rule_chain_filter(&rule))
+    skb_to_packet(skb, &packet);
+
+    LOG_DEBUG("Hook TCP packet: [%u.%u.%u.%u:%u] -->  [%u.%u.%u.%u:%u]\n", IP(packet.sip), packet.sport, IP(packet.dip), packet.dport);
+
+    if (rule_chain_filter_packet(&packet))
     {
         return NF_DROP;
     }
