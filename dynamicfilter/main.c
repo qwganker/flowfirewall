@@ -15,11 +15,12 @@
 #include <linux/if_ether.h>
 #include <linux/if_packet.h>
 
+#include "../common/utils.h"
+#include "../common/log.h"
+
 #include "config.h"
 #include "packet.h"
-#include "utils.h"
 #include "rule.h"
-#include "log.h"
 
 static rule_t rule_list_head;
 
