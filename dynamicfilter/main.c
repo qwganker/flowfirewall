@@ -11,9 +11,13 @@
 #include <linux/netdevice.h>
 #include <linux/netfilter.h>
 #include <linux/netfilter_ipv4.h>
+#include <linux/netlink.h>
 #include <linux/if_arp.h>
 #include <linux/if_ether.h>
 #include <linux/if_packet.h>
+
+#include <stddef.h> // NULL
+#include <stdbool.h> // bool
 
 #include "../common/utils.h"
 #include "../common/log.h"
@@ -23,6 +27,7 @@
 #include "rule.h"
 
 static rule_t rule_list_head;
+static struct sock *nl_sock_fd = NULL;
 
 void skb_to_packet(struct sk_buff *skb, packet_t *packet)
 {
@@ -87,7 +92,7 @@ bool filter_packet(const packet_t *in)
     return false;
 }
 
-unsigned int watch_in(void *priv, struct sk_buff *skb, const struct nf_hook_state *state)
+unsigned int nf_watch(void *priv, struct sk_buff *skb, const struct nf_hook_state *state)
 {
     struct ethhdr *eth = eth_hdr(skb);
     struct iphdr *iph = ip_hdr(skb);
@@ -121,17 +126,44 @@ unsigned int watch_in(void *priv, struct sk_buff *skb, const struct nf_hook_stat
 }
 
 static struct nf_hook_ops firewall_hook_ops = {
-    .hook = watch_in,
+    .hook = nf_watch,
     .pf = PF_INET,
     .hooknum = NF_INET_PRE_ROUTING,
     .priority = NF_IP_PRI_FIRST,
 };
+
+static void nl_watch(struct sk_buff *skb)
+{
+
+}
+
+static int init_netlink(void)
+{
+    struct netlink_kernel_cfg nl_cfg = {
+        .input = nl_watch,
+    };
+
+    nl_sock_fd = netlink_kernel_create(&init_net, 20, &nl_cfg);
+    if (nl_sock_fd == NULL)
+    {
+        return -1;
+    }
+
+    return 1;
+}
 
 static int __init firewall_module_init(void)
 {
     if (0 > nf_register_net_hook(&init_net, &firewall_hook_ops))
     {
         LOG_ERROR("register nf module failed !!!\n");
+        return -1;
+    }
+
+    if (0 > init_netlink())
+    {
+        LOG_ERROR("init netlink failed !!!");
+        return -1;
     }
 
     init_rule_list();
