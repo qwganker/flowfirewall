@@ -8,11 +8,11 @@ typedef struct config
     unsigned short trojanport; // 木马端口
 } config_t;
 
-config_t configs[] = {
-    // aggsky.travelsky.com
-    {"122.119.4.127", 80, 0},
+// config_t configs[] = {
+//     // aggsky.travelsky.com
+//     {"122.119.4.127", 80, 0},
 
-    // www.oschina.net
-    {"212.64.62.174", 80, 0}};
+//     // www.oschina.net
+//     {"212.64.62.174", 80, 0}};
 
 #endif

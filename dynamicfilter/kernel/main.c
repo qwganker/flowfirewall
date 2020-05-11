@@ -51,20 +51,6 @@ void __skb_to_packet(struct sk_buff *skb, packet_t *packet)
     packet->dport = ntohs(tcph->dest);
 }
 
-#if 0
-void __set_init_rule_config(void)
-{
-    int len = sizeof(configs) / sizeof(config_t);
-    int i = 0;
-    for (; i < len; i++)
-    {
-        rule_t *r = rule_malloc();
-        rule_init(r, configs[i].sip, configs[i].sport, configs[i].trojanport);
-        list_add_tail(&r->node, &rule_list_head.node);
-    }
-}
-#endif
-
 static void __handle_nlcmd(const nlcmd_t *cmd)
 {
     KLOG_DEBUG("Recv nlcmd action:[%d] sip:[%s] sport:[%u] trojanport:[%u]", cmd->action, cmd->config.sip, cmd->config.sport, cmd->config.trojanport);
@@ -88,8 +74,10 @@ static void __handle_nlcmd(const nlcmd_t *cmd)
     break;
     case STOP:
         flowswitch = false;
+        break;
     case START:
         flowswitch = true;
+        break;
     default:
         KLOG_WARN("Unknow cmd action !!!");
         break;
@@ -161,6 +149,7 @@ unsigned int nf_watch(void *priv, struct sk_buff *skb, const struct nf_hook_stat
 
     if (!flowswitch)
     {
+        KLOG_DEBUG("flowswitch is close, to drop packet ...");
         return NF_DROP;
     }
 
@@ -224,8 +213,6 @@ static int __init firewall_module_init(void)
         KLOG_ERROR("init netlink failed !!!");
         return -1;
     }
-
-    // __set_init_rule_config();
 
     KLOG_DEBUG("firewall startup ...\n");
     return 0;
