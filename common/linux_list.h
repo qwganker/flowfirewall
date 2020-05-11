@@ -1,7 +1,7 @@
 #ifndef LINUX_LIST_H
 #define LINUX_LIST_H
 
-#include <stdlib.h>	//NULL
+#include <stddef.h> // NULL
 
 /*
  * These are non-NULL pointers that will result in page faults

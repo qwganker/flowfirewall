@@ -9,5 +9,4 @@ typedef struct packet
     unsigned short dport;
 } packet_t;
 
-
 #endif

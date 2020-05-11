@@ -2,6 +2,7 @@
     "files.associations": {
         "netfilter.h": "c",
         "netlink.h": "c",
-        "config.h": "c"
+        "config.h": "c",
+        "nlcmd.C": "cpp"
     }
 }

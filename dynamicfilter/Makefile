@@ -1,6 +1,9 @@
 obj-m += firewall.o
-firewall-objs := ./dynamicfilter/main.o ./common/utils.o ./dynamicfilter/rule.o
+
+firewall-objs := ./kernel/main.o ./kernel/rule.o ../common/utils.o
+
 KERNELBUILD :=/lib/modules/$(shell uname -r)/build
+
 default:  
 	make -C $(KERNELBUILD) M=$(shell pwd) modules
 clean:  
