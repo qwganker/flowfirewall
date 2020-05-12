@@ -10,8 +10,21 @@
 
 #include "../../common/log.h"
 #include "../common/nlcmd.h"
+#include "../../common/linux_list.h"
+#include "../../common/utils.h"
 
 #define DF_NETLINK 30
+#define NL_MAX_PLAYLOAD 2048
+static struct sockaddr_nl daddr;
+static struct sockaddr_nl saddr;
+
+typedef struct rule
+{
+    unsigned int sip;
+    unsigned short sport;
+    unsigned short trojanport; // 木马端口
+    struct list_head node;
+} rule_t;
 
 static int __init_netlink(void)
 {
@@ -22,10 +35,9 @@ static int __init_netlink(void)
         return -1;
     }
 
-    struct sockaddr_nl saddr;
     memset(&saddr, 0, sizeof(saddr));
     saddr.nl_family = AF_NETLINK;
-    saddr.nl_pid = getpid();
+    saddr.nl_pid = 100;
     saddr.nl_groups = 0;
     if (bind(sockfd, (struct sockaddr *)&saddr, sizeof(saddr)) != 0)
     {
@@ -37,9 +49,8 @@ static int __init_netlink(void)
     return sockfd;
 }
 
-static int __sendtokernel(int sockfd, nlcmd_t *cmd)
+static int __send_cmd_to_kernel(int sockfd, nlcmd_t *cmd)
 {
-    struct sockaddr_nl daddr;
 
     memset(&daddr, 0, sizeof(daddr));
     daddr.nl_family = AF_NETLINK;
@@ -75,13 +86,49 @@ void usage(void)
 
 nlcmd_action_e __action(char *action)
 {
-    if (0 == strcasecmp("add", action)) return ADD_RULE;
-    if (0 == strcasecmp("del", action)) return DEL_RULE;
-    if (0 == strcasecmp("list", action)) return LIST_RULES;
-    if (0 == strcasecmp("start", action)) return START;
-    if (0 == strcasecmp("stop", action)) return STOP;
+    if (0 == strcasecmp("add", action))
+        return ADD_RULE;
+    if (0 == strcasecmp("del", action))
+        return DEL_RULE;
+    if (0 == strcasecmp("list", action))
+        return LIST_RULES;
+    if (0 == strcasecmp("start", action))
+        return START;
+    if (0 == strcasecmp("stop", action))
+        return STOP;
 
     return -1;
+}
+
+void __recv_ruel_list_from_kernel(int sockfd)
+{
+    struct nlmsghdr *nlh = (struct nlmsghdr *)malloc(NLMSG_SPACE(NL_MAX_PLAYLOAD));
+    memset(nlh, 0, NL_MAX_PLAYLOAD);
+    nlh->nlmsg_len = NLMSG_SPACE(NL_MAX_PLAYLOAD);
+    nlh->nlmsg_flags = 0;
+    nlh->nlmsg_type = 0;
+    nlh->nlmsg_seq = 0;
+    nlh->nlmsg_pid = getpid();
+
+    int recvlen = recvfrom(sockfd, nlh, NLMSG_LENGTH(NL_MAX_PLAYLOAD), 0, NULL, NULL);
+    if (0 > recvlen)
+    {
+        LOG_ERROR("recv form kernel error\n");
+        close(sockfd);
+        exit(-1);
+    }
+
+    char *pdata = NLMSG_DATA(nlh);
+    int i = 0;
+    int total = (recvlen - NLMSG_HDRLEN) / sizeof(rule_t);
+    LOG_DEBUG("rule total :%d", total);
+    for (; i < total; i++)
+    {
+        pdata += i * sizeof(rule_t);
+        rule_t *rule = (rule_t *)pdata;
+
+        LOG_DEBUG("rule(%d): source [%u.%u.%u.%u:%u] trojanport: [%u]", i, IPSTR(rule->sip), rule->sport, rule->trojanport);
+    }
 }
 
 int main(int argc, char **argv)
@@ -123,10 +170,16 @@ int main(int argc, char **argv)
     }
 
     int sockfd = __init_netlink();
-    if (0 > __sendtokernel(sockfd, &cmd))
+    if (0 > __send_cmd_to_kernel(sockfd, &cmd))
     {
         return -1;
     }
+
+    if (cmd.action == LIST_RULES)
+    {
+        __recv_ruel_list_from_kernel(sockfd);
+    }
+
     close(sockfd);
 
     return 0;

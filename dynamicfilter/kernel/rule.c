@@ -71,3 +71,41 @@ void rule_list_remove(rule_t *node, rule_t *head)
         }
     }
 }
+
+unsigned int rule_list_total(rule_t *head)
+{
+    unsigned int total = 0;
+
+    rule_t *pos, *n;
+    list_for_each_entry_safe(pos, n, &head->node, node)
+    {
+        total++;
+    }
+
+    return total;
+}
+
+char *rule_list_serialize(rule_t *head)
+{
+    unsigned int total = rule_list_total(head);
+    if (0 == total)
+    {
+        return NULL;
+    }
+
+    char *p = kmalloc(sizeof(rule_t) * total, GFP_ATOMIC);
+    if (!p)
+    {
+        return NULL;
+    }
+
+    rule_t *pos, *n;
+    int num = 0;
+    list_for_each_entry_safe(pos, n, &head->node, node)
+    {
+        memcpy(p + num * sizeof(rule_t), (char *)pos, sizeof(rule_t));
+        num++;
+    }
+
+    return p;
+}

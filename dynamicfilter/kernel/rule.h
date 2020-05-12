@@ -19,5 +19,7 @@ void rule_list_free(rule_t *head);
 void rule_list_add(rule_t *node, rule_t *head);
 void rule_list_remove(rule_t *node, rule_t *head);
 bool rule_compare(rule_t *rule1, rule_t *rule2);
+unsigned int rule_list_total(rule_t *head);
+char *rule_list_serialize(rule_t *head);
 
 #endif

@@ -1,6 +1,7 @@
 /**
- * Linux 4.18.0-15-generic
+ * ubunt18.04 Linux 4.18.0-15-generic
 */
+
 #include <linux/module.h>
 #include <linux/fs.h>
 #include <linux/kernel.h>
@@ -15,8 +16,8 @@
 #include <linux/if_arp.h>
 #include <linux/if_ether.h>
 #include <linux/if_packet.h>
-#include <linux/list.h>
-#include <linux/spinlock.h>
+// #include <linux/list.h>
+// #include <linux/spinlock.h>
 
 #include <stddef.h>  // NULL
 #include <stdbool.h> // bool
@@ -51,7 +52,37 @@ void __skb_to_packet(struct sk_buff *skb, packet_t *packet)
     packet->dport = ntohs(tcph->dest);
 }
 
-static void __handle_nlcmd(const nlcmd_t *cmd)
+static int __nl_sendto_userspace(char *pbuf, uint16_t len)
+{
+    struct sk_buff *nl_skb;
+    struct nlmsghdr *nlh;
+
+    int ret;
+
+    /* 创建sk_buff 空间 */
+    nl_skb = nlmsg_new(len, GFP_ATOMIC);
+    if (!nl_skb)
+    {
+        KLOG_ERROR("netlink alloc failure\n");
+        return -1;
+    }
+
+    /* 设置netlink消息头部 */
+    nlh = nlmsg_put(nl_skb, 0, 0, DF_NETLINK, len, 0);
+    if (nlh == NULL)
+    {
+        KLOG_ERROR("nlmsg_put failaure \n");
+        nlmsg_free(nl_skb);
+        return -1;
+    }
+
+    memcpy(nlmsg_data(nlh), pbuf, len);
+    ret = netlink_unicast(nl_sockfd, nl_skb, 100, MSG_DONTWAIT);
+
+    return ret;
+}
+
+static void __handle_recv_nlcmd(const nlcmd_t *cmd)
 {
     KLOG_DEBUG("Recv nlcmd action:[%d] sip:[%s] sport:[%u] trojanport:[%u]", cmd->action, cmd->config.sip, cmd->config.sport, cmd->config.trojanport);
 
@@ -78,8 +109,16 @@ static void __handle_nlcmd(const nlcmd_t *cmd)
     case START:
         flowswitch = true;
         break;
+    case LIST_RULES:
+    {
+        char *p = rule_list_serialize(&rule_list_head);
+        unsigned int total = rule_list_total(&rule_list_head);
+        KLOG_DEBUG("total ===== %d", total);
+        __nl_sendto_userspace(p, sizeof(rule_t) * total);
+    }
+    break;
     default:
-        KLOG_WARN("Unknow cmd action !!!\n");
+        KLOG_WARN("Unknow nlcmd action !!!\n");
         break;
     }
     UNLOCK_BH
@@ -177,7 +216,7 @@ static void __nl_recv(struct sk_buff *skb)
     {
         nlh = nlmsg_hdr(skb);
         cmd = (nlcmd_t *)NLMSG_DATA(nlh);
-        __handle_nlcmd(cmd);
+        __handle_recv_nlcmd(cmd);
     }
 }
 
