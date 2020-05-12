@@ -79,7 +79,7 @@ static void __handle_nlcmd(const nlcmd_t *cmd)
         flowswitch = true;
         break;
     default:
-        KLOG_WARN("Unknow cmd action !!!");
+        KLOG_WARN("Unknow cmd action !!!\n");
         break;
     }
     UNLOCK_BH
@@ -111,14 +111,14 @@ bool __filter_packet(const packet_t *in)
     {
         if (__match_rule(pos, in))
         {
-            KLOG_WARN("to drop packet !!!\n\n");
+            KLOG_WARN("to drop packet !!!\n");
             UNLOCK_BH
             return true;
         }
     }
     UNLOCK_BH
 
-    KLOG_DEBUG("to accept packet ...\n\n");
+    KLOG_DEBUG("to accept packet ...\n");
     return false;
 }
 
@@ -145,11 +145,11 @@ unsigned int nf_watch(void *priv, struct sk_buff *skb, const struct nf_hook_stat
 
     __skb_to_packet(skb, &packet);
 
-    KLOG_DEBUG("Hook TCP packet: [%u.%u.%u.%u:%u] -->  [%u.%u.%u.%u:%u]\n", IPSTR(packet.sip), packet.sport, IPSTR(packet.dip), packet.dport);
+    KLOG_DEBUG("Hook TCP packet: [%u.%u.%u.%u:%u] -->  [%u.%u.%u.%u:%u]", IPSTR(packet.sip), packet.sport, IPSTR(packet.dip), packet.dport);
 
     if (!flowswitch)
     {
-        KLOG_DEBUG("flowswitch is close, to drop packet ...");
+        KLOG_DEBUG("flowswitch is close, to drop packet ...\n");
         return NF_DROP;
     }
 

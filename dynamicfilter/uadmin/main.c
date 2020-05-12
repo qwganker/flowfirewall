@@ -87,11 +87,10 @@ nlcmd_action_e __action(char *action)
 int main(int argc, char **argv)
 {
     int opt, index;
-    // nlcmd_t cmd = {
-    //     .action = ADD_RULE,
-    //     .config = {"122.119.4.127", 80, 0}, // aggsky.travelsky.com
-    // };
-    nlcmd_t cmd;
+    nlcmd_t cmd = {
+        .action = -1,
+        .config = {"", 0, 0}, // aggsky.travelsky.com
+    };
 
     struct option opts[] = {
         {"action", required_argument, NULL, 'a'},
