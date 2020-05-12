@@ -144,9 +144,9 @@ int main(int argc, char **argv)
         {"sip", required_argument, NULL, 'i'},
         {"sport", required_argument, NULL, 'p'},
         {"tport", required_argument, NULL, 't'},
-        {0, 0, 0, 0}};
+        {NULL, no_argument, NULL, 0}};
 
-    while ((opt = getopt_long(argc, argv, "a:i::s::t::", opts, &index)) != -1)
+    while ((opt = getopt_long(argc, argv, "a:i:s:t:?", opts, &index)) != -1)
     {
         switch (opt)
         {
@@ -163,10 +163,17 @@ int main(int argc, char **argv)
         case 't':
             cmd.config.trojanport = atoi(optarg);
             break;
+        case '?':
         default:
             usage();
             return -1;
         }
+    }
+
+    if (-1 == cmd.action)
+    {
+        usage();
+        return -1;
     }
 
     int sockfd = __init_netlink();
