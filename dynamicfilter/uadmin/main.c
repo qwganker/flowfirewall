@@ -136,7 +136,7 @@ int main(int argc, char **argv)
     int opt, index;
     nlcmd_t cmd = {
         .action = -1,
-        .config = {"", 0, 0}, // aggsky.travelsky.com
+        .config = {"", 0, 0},
     };
 
     struct option opts[] = {
