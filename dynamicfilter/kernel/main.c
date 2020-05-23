@@ -36,6 +36,7 @@ static spinlock_t rule_list_lock;
 static bool flowswitch = true;
 static rule_t rule_list_head;
 static struct sock *nl_sockfd = NULL;
+static long total = 0;
 
 #define INIT_LOCK_BH spin_lock_init(&rule_list_lock);
 #define LOCK_BH spin_lock_bh(&rule_list_lock);
@@ -184,7 +185,8 @@ unsigned int nf_watch(void *priv, struct sk_buff *skb, const struct nf_hook_stat
 
     __skb_to_packet(skb, &packet);
 
-    KLOG_DEBUG("Hook TCP packet: [%u.%u.%u.%u:%u] -->  [%u.%u.%u.%u:%u]", IPSTR(packet.sip), packet.sport, IPSTR(packet.dip), packet.dport);
+    total++;
+    KLOG_DEBUG("Hook TCP packet: [%u.%u.%u.%u:%u] -->  [%u.%u.%u.%u:%u]  total: [%ld]", IPSTR(packet.sip), packet.sport, IPSTR(packet.dip), packet.dport, total);
 
     if (!flowswitch)
     {
